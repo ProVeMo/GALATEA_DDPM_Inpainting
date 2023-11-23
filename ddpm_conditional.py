@@ -10,11 +10,13 @@ from modules import UNet_conditional, EMA
 import logging
 from torch.utils.tensorboard import SummaryWriter
 
+from schedules import cosine_beta_schedule
+
 logging.basicConfig(format="%(asctime)s - %(levelname)s: %(message)s", level=logging.INFO, datefmt="%I:%M:%S")
 
 
 class Diffusion:
-    def __init__(self, noise_steps=1000, beta_start=1e-4, beta_end=0.02, img_size=256, device="cuda"):
+    def __init__(self, noise_steps=1000, beta_start=1e-4, beta_end=0.02, img_size=256, device="cuda", schedule="linear"):
         self.noise_steps = noise_steps
         self.beta_start = beta_start
         self.beta_end = beta_end
@@ -23,11 +25,18 @@ class Diffusion:
         self.alpha = 1. - self.beta
         self.alpha_hat = torch.cumprod(self.alpha, dim=0)
 
+        self.schedule = schedule
+
         self.img_size = img_size
         self.device = device
 
     def prepare_noise_schedule(self):
-        return torch.linspace(self.beta_start, self.beta_end, self.noise_steps)
+        if self.schedule == "linear":
+            return torch.linspace(self.beta_start, self.beta_end, self.noise_steps)
+        elif self.schedule == "cosine":
+            return cosine_beta_schedule(self.noise_steps)
+        else:
+            raise NotImplementedError(f"Schedule type {self.schedule} is not implemented.")
 
     def noise_images(self, x, t):
         sqrt_alpha_hat = torch.sqrt(self.alpha_hat[t])[:, None, None, None]
