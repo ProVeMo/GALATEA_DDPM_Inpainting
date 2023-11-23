@@ -71,7 +71,7 @@ def train(args):
     optimizer = optim.AdamW(model.parameters(), lr=args.lr)
     mse = nn.MSELoss()
     diffusion = Diffusion(img_size=args.image_size, device=device)
-    logger = SummaryWriter(os.path.join("runs", args.run_name))
+    #logger = SummaryWriter(os.path.join("runs", args.run_name))
     l = len(dataloader)
     ema = EMA(0.995)
     ema_model = copy.deepcopy(model).eval().requires_grad_(False)
@@ -95,7 +95,7 @@ def train(args):
             ema.step_ema(ema_model, model)
 
             pbar.set_postfix(MSE=loss.item())
-            logger.add_scalar("MSE", loss.item(), global_step=epoch * l + i)
+            #logger.add_scalar("MSE", loss.item(), global_step=epoch * l + i)
 
         if epoch % 10 == 0:
             labels = torch.arange(args.num_classes).long().to(device)
