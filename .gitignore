@@ -8,3 +8,6 @@ results/DDPM_conditional/
 results/DDPM_Uncondtional/
 
 ./results
+./runs/DDPM_conditional
+
+*.0
