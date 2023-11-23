@@ -1,0 +1,10 @@
+
+*.pyc
+
+*.pt
+
+results/DDPM_conditional/
+
+results/DDPM_Uncondtional/
+
+./results
