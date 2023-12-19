@@ -75,7 +75,7 @@ def train(args):
     optimizer = optim.AdamW(model.parameters(), lr=args.lr)
     mse = nn.MSELoss()
     diffusion = Diffusion(img_size=args.image_size, device=device, schedule="cosine")
-    logger = SummaryWriter(os.path.join("runs", args.run_name))
+    #logger = SummaryWriter(os.path.join("runs", args.run_name))
     l = len(dataloader)
 
     ema = EMA(beta=0.99)
@@ -97,7 +97,7 @@ def train(args):
             ema.step_ema(ema_model, model)
 
             pbar.set_postfix(MSE=loss.item())
-            logger.add_scalar("MSE", loss.item(), global_step=epoch * l + i)
+            #logger.add_scalar("MSE", loss.item(), global_step=epoch * l + i)
 
         if epoch % 10 == 0:
             print(f"Loss Epoch {epoch}: {loss}")

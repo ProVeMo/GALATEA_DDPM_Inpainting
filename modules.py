@@ -241,7 +241,7 @@ class UNet_conditional(nn.Module):
         t = self.pos_encoding(t, self.time_dim)
 
         if y is not None:
-            t += self.label_emb(y)
+            t += self.label_emb(y.type(torch.int64))
 
         x1 = self.inc(x)
         x2 = self.down1(x1, t)

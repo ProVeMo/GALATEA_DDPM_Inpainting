@@ -46,7 +46,8 @@ class ImageTransform:
             transforms.RandomHorizontalFlip(self.flip_prob),
             transforms.RandomVerticalFlip(self.flip_prob),
             transforms.ToTensor(),
-            transforms.Normalize(mean=mean, std=std)
+            #transforms.Normalize(mean=mean, std=std)
+            #transforms.Lambda(lambda t: (t * 2) - 1),
         ])
 
     def transform(self):
@@ -90,6 +91,11 @@ class SampledSeqDatasetTrain(torch.utils.data.Dataset):
         self.trainSteps = trainSteps
         self.region_ratio_trainB = region_ratio_train
         self.conditional_classes = conditional_classes
+        self.num_classes = len(self.conditional_classes["duodenum"])
+
+        self.mask_dir = "/home/mwallrodt/Desktop/mnielsen/Desktop/Workspace/tempGAN/dataset/tempDataset_v2/ProGAN_masks"
+        self.generated_masks = os.listdir(self.mask_dir)
+        self.num_masks = len(self.generated_masks)
 
         self.cocoReaders = setup_COCO_readers(data_dir, self.conditional_classes)
 
@@ -104,6 +110,8 @@ class SampledSeqDatasetTrain(torch.utils.data.Dataset):
 
         self.maskValue = masked_value
         self.toPIL = torchvision.transforms.ToPILImage()
+        self.h_flip = torchvision.transforms.RandomHorizontalFlip(p=1.0)
+        self.v_flip = torchvision.transforms.RandomVerticalFlip(p=1.0)
     def __len__(self):
         return self.trainSteps
 
@@ -113,18 +121,34 @@ class SampledSeqDatasetTrain(torch.utils.data.Dataset):
         # returns dict{'video' : target_vid, 'target_frame': target_frame, 'condition': condition}
         frameset = self.frameSampler.get_targetframe(region='duodenum') # oseophagus
 
-        Bi = Image.open(os.path.join(self.data_dir, "trainB", frameset['video'], f"frame{frameset['target_frame']}.jpg"))
+        Bi = Image.open(os.path.join(self.data_dir, "trainB", frameset['video'], f"frame{frameset['target_frame']}.jpg")).convert("L")
         label = list(self.conditional_classes[frameset['region']]).index(frameset['condition'])
 
+        multi_ch_masks = torch.zeros((self.num_classes, self.image_size,self.image_size), dtype=torch.float32)
+
         B_real = self.transform.transform(Bi)
-        # if frameset['condition'] == "normal":
-        #     sample_masked, mask = generate_random_mask(B_real, mask_value=self.maskValue)
-        # else:
-        #     mask = getMaskOfFrame(self.cocoReaders, frameset['video'], frameset['condition'],
-        #                                int(frameset['target_frame']), self.image_size)
-        #     m = mask.expand(3,*mask.shape[1:])
-        #     sample_masked = deepcopy(B_real)
-        #     sample_masked[m == 1] = self.maskValue
+        if frameset['condition'] == "normal":
+            #sample_masked, mask = generate_random_mask(B_real, mask_value=self.maskValue)
+            idx_mask = random.randint(0, self.num_masks - 1)
+            mask = Image.open(os.path.join(self.mask_dir, self.generated_masks[idx_mask]))
+            mask = self.transform_gray.transform(mask)
+            mask = torch.round(mask)
+            mask = (mask + 1) / 2
+            sample_masked = (1 - (mask + 1) / 2) * B_real
+        else:
+            mask = getMaskOfFrame(self.cocoReaders, frameset['video'], frameset['condition'],
+                                       int(frameset['target_frame']), self.image_size)
+            mask = (mask + 1) / 2
+            sample_masked = (1-mask) * B_real
+
+        # random horizontal flipping
+        if np.random.random() > 0.5:
+            B_real = self.h_flip(B_real)
+            mask = self.h_flip(mask)
+        # random vertical flipping
+        if np.random.random() > 0.5:
+            B_real = self.v_flip(B_real)
+            mask = self.v_flip(mask)
 
             # import matplotlib.pyplot as plt
             # f, (ax1, ax2) = plt.subplots(1, 2)
@@ -132,9 +156,21 @@ class SampledSeqDatasetTrain(torch.utils.data.Dataset):
             # ax2.imshow(Bi)
             # plt.show()
             # print("Stop!")
+        #multi_ch_masks[0] = 1 - mask # normal tissue
+        multi_ch_masks[label] = mask
+        # d = Munch()
+        # d.gt = B_real
+        # d.label = label
+        # d.masks = mask
 
+        #multi_ch_masks[label] = mask[0]
+        #out = torch.cat((B_real,multi_ch_masks), dim=0)
+        label_vec = torch.zeros(self.num_classes, dtype=torch.float32)
+        label_vec[label] = 1
 
-        return B_real, label
+        stacked = torch.cat([B_real, multi_ch_masks], dim=0)
+
+        return stacked, label_vec, mask.type(torch.float32)
 
 
 def setup_COCO_readers(data_dir, conditional_classes):
@@ -152,12 +188,12 @@ def setup_COCO_readers(data_dir, conditional_classes):
                             for p in frame_annotaions[r][c]:
                                     if p not in cocoReaders.keys():
                                         cocoReaders[p] = {}
-                                    cocoReaders[p][c] = COCO(os.path.join(data_dir, "segmentationMasks", p, 'result.json'))
+                                    cocoReaders[p][c] = COCO(os.path.join(data_dir, "segmentationMasks/patients", p, 'result.json'))
                                     if p == "Ulcus_Duodeni_kvasir4":
                                         # necessary since label studio splitted dataset due to PC breakdown
                                         if f"{p}_2" not in cocoReaders.keys():
                                             cocoReaders[f"{p}_2"] = {}
-                                        cocoReaders[f"{p}_2"][c] = COCO(os.path.join(data_dir, "segmentationMasks", f"{p}_2", 'result.json'))
+                                        cocoReaders[f"{p}_2"][c] = COCO(os.path.join(data_dir, "segmentationMasks/patients", f"{p}_2", 'result.json'))
         except yaml.YAMLError as exc:
             print(exc)
 

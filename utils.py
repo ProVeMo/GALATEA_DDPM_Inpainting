@@ -9,9 +9,11 @@ from data.sampled_seq_DL import SampledSeqDatasetTrain
 
 def plot_images(images):
     plt.figure(figsize=(32, 32))
+    cmap = "gray" if images.shape[1] == 1 else None
     plt.imshow(torch.cat([
         torch.cat([i for i in images.cpu()], dim=-1),
-    ], dim=-2).permute(1, 2, 0).cpu())
+    ], dim=-2).permute(1, 2, 0).cpu()
+               , cmap=cmap)
     plt.show()
 
 
